@@ -24,3 +24,18 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes blink {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 18px;
+  background-color: #212121;
+  animation: blink 1s infinite;
+  vertical-align: middle;
+}
