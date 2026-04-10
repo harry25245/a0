@@ -1,12 +1,13 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
 // --- THE ALPHA TYPEWRITER COMPONENT ---
-const AlphaTypewriter = ({ text, speed = 20, onFinished }: { text: string, speed?: number, onFinished?: () => void }) => {
+// Shows raw text/code while typing, then "snaps" to beautiful LaTeX formatting.
+const AlphaTypewriter = ({ text, speed = 15 }: { text: string; speed?: number }) => {
   const [displayedText, setDisplayedText] = useState("");
   const [isDone, setIsDone] = useState(false);
 
@@ -18,52 +19,156 @@ const AlphaTypewriter = ({ text, speed = 20, onFinished }: { text: string, speed
       if (i >= text.length) {
         clearInterval(timer);
         setIsDone(true);
-        if (onFinished) onFinished();
       }
     }, speed);
     return () => clearInterval(timer);
   }, [text, speed]);
 
   return (
-    <div className="alpha-response">
+    <div className="w-full">
       {isDone ? (
-        // RENDERED VERSION (Latex converted)
-        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-          {text}
-        </ReactMarkdown>
+        <div className="prose prose-sm max-w-none transition-opacity duration-500 ease-in">
+          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            {text}
+          </ReactMarkdown>
+        </div>
       ) : (
-        // TYPING VERSION (Raw code with cursor)
-        <div className="font-mono text-sm text-gray-600 whitespace-pre-wrap">
+        <div className="font-mono text-sm text-gray-500 whitespace-pre-wrap leading-relaxed">
           {displayedText}
-          <span className="w-2 h-4 bg-gray-400 inline-block ml-1 animate-pulse" />
+          <span className="inline-block w-2 h-4 ml-1 bg-gray-400 animate-pulse" />
         </div>
       )}
     </div>
   );
 };
 
-// --- MAIN APP COMPONENT ---
 export default function AlphaAI() {
-  const [messages, setMessages] = useState<{role: string, content: string, id: number}[]>([]);
-  // ... (keep your existing handleSend and weather logic) ...
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<{ role: string; content: string; id: number }[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
+  const [weather, setWeather] = useState('Loading Weather...');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 1. Fetch Weather for Pimpri-Chinchwad
+  useEffect(() => {
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=18.62&longitude=73.80&current_weather=true")
+      .then(res => res.json())
+      .then(data => setWeather(`${data.current_weather.temperature}°C & Clear`))
+      .catch(() => setWeather("Pimpri-Chinchwad"));
+  }, []);
+
+  // 2. Auto-scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isThinking]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isThinking) return;
+
+    const userMsg = { role: 'user', content: input, id: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsThinking(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [...messages, userMsg].map(({role, content}) => ({role, content})) }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.text) {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.text, id: Date.now() + 1 }]);
+      }
+    } catch (error) {
+      console.error("Alpha Error:", error);
+    } finally {
+      setIsThinking(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#F9F9F8] overflow-hidden">
-       {/* Chat Area */}
-       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[90%] ${m.role === 'user' ? 'bg-[#ECECF1] p-3 rounded-2xl' : 'w-full'}`}>
-              {m.role === 'user' ? (
-                <p className="text-sm">{m.content}</p>
-              ) : (
-                <AlphaTypewriter text={m.content} />
-              )}
+    <div className="flex flex-col h-[100dvh] bg-[#F9F9F8] text-[#212121] overflow-hidden font-sans">
+      
+      {/* HEADER */}
+      <nav className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-[#F9F9F8] z-20">
+        <div className="flex flex-col">
+          <span className="text-xs font-black tracking-widest text-gray-800">ALPHA AI</span>
+          <span className="text-[10px] text-green-600 font-medium uppercase tracking-tighter">System Active</span>
+        </div>
+        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{weather}</span>
+      </nav>
+
+      {/* CHAT AREA */}
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 py-6 space-y-10 scroll-smooth"
+      >
+        <div className="max-w-2xl mx-auto w-full">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-center opacity-30">
+              <div className="w-12 h-12 bg-gray-200 rounded-full mb-4 animate-pulse" />
+              <p className="text-sm font-medium italic">Ready when you are, Harry.</p>
             </div>
-          </div>
-        ))}
+          )}
+
+          {messages.map((m) => (
+            <div key={m.id} className={`flex w-full mb-8 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`relative max-w-[85%] ${m.role === 'user' ? 'bg-[#ECECF1] px-4 py-3 rounded-2xl text-sm shadow-sm' : 'w-full'}`}>
+                {m.role === 'user' ? (
+                  <p className="leading-relaxed">{m.content}</p>
+                ) : (
+                  <AlphaTypewriter text={m.content} speed={12} />
+                )}
+              </div>
+            </div>
+          ))}
+
+          {isThinking && (
+            <div className="flex justify-start items-center space-x-2 opacity-50">
+              <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.15s]" />
+              <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce" />
+            </div>
+          )}
+        </div>
       </div>
-      {/* ... (keep your input bar) ... */}
+
+      {/* INPUT AREA */}
+      <div className="p-4 bg-[#F9F9F8] border-t border-gray-100 pb-[env(safe-area-inset-bottom,1.5rem)]">
+        <div className="max-w-2xl mx-auto relative group">
+          <div className="relative flex items-center bg-white border border-gray-300 rounded-2xl shadow-sm transition-all focus-within:ring-1 focus-within:ring-gray-400 focus-within:border-gray-400">
+            <textarea 
+              rows={1}
+              className="w-full py-4 pl-4 pr-12 bg-transparent resize-none focus:outline-none text-sm leading-tight"
+              placeholder="What's on your mind?"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+            <button 
+              onClick={handleSend}
+              disabled={isThinking || !input.trim()}
+              className={`absolute right-2 p-2 rounded-xl transition-all ${isThinking || !input.trim() ? 'text-gray-200' : 'text-black hover:bg-gray-100'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+              </svg>
+            </button>
+          </div>
+          <p className="text-[9px] text-center mt-3 text-gray-400 font-medium uppercase tracking-widest">Alpha Personal Assistant v1.0</p>
+        </div>
+      </div>
     </div>
   );
 }
