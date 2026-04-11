@@ -45,15 +45,28 @@ export default function AlphaAI() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: string; content: string; id: number }[]>([]);
   const [isThinking, setIsThinking] = useState(false);
-  const [weather, setWeather] = useState('Loading Weather...');
+  const [weather, setWeather] = useState('Locating...');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 1. Fetch Weather for Pimpri-Chinchwad
+  // 1. Dynamic Geolocation & Weather Fetch
   useEffect(() => {
-    fetch("https://api.open-meteo.com/v1/forecast?latitude=18.62&longitude=73.80&current_weather=true")
-      .then(res => res.json())
-      .then(data => setWeather(`${data.current_weather.temperature}°C & Clear`))
-      .catch(() => setWeather("Pimpri-Chinchwad"));
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`)
+            .then(res => res.json())
+            .then(data => {
+              const temp = Math.round(data.current_weather.temperature);
+              setWeather(`${temp}°C & Local`);
+            })
+            .catch(() => setWeather("Weather Offline"));
+        },
+        () => setWeather("Location Denied")
+      );
+    } else {
+      setWeather("No GPS Support");
+    }
   }, []);
 
   // 2. Auto-scroll to bottom
@@ -91,10 +104,10 @@ export default function AlphaAI() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#F9F9F8] text-[#212121] overflow-hidden font-sans">
+    <div className="fixed inset-0 flex flex-col bg-[#F9F9F8] text-[#212121] overflow-hidden font-sans">
       
       {/* HEADER */}
-      <nav className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-[#F9F9F8] z-20">
+      <nav className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-[#F9F9F8] z-20">
         <div className="flex flex-col">
           <span className="text-xs font-black tracking-widest text-gray-800">ALPHA AI</span>
           <span className="text-[10px] text-green-600 font-medium uppercase tracking-tighter">System Active</span>
@@ -143,8 +156,8 @@ export default function AlphaAI() {
         </div>
       </div>
 
-      {/* INPUT AREA */}
-      <div className="p-4 bg-[#F9F9F8] border-t border-gray-100 pb-[env(safe-area-inset-bottom,1.5rem)]">
+      {/* INPUT AREA - Anchored to bottom */}
+      <div className="shrink-0 p-4 bg-[#F9F9F8] border-t border-gray-100 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="max-w-2xl mx-auto relative group">
           <div className="relative flex items-center bg-white border border-gray-300 rounded-2xl shadow-sm transition-all focus-within:ring-1 focus-within:ring-gray-400 focus-within:border-gray-400">
             <textarea 
