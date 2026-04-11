@@ -6,7 +6,6 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
 // --- THE ALPHA TYPEWRITER COMPONENT ---
-// Shows raw text/code while typing, then "snaps" to beautiful LaTeX formatting.
 const AlphaTypewriter = ({ text, speed = 15 }: { text: string; speed?: number }) => {
   const [displayedText, setDisplayedText] = useState("");
   const [isDone, setIsDone] = useState(false);
@@ -118,18 +117,24 @@ export default function AlphaAI() {
 
           {messages.map((m) => (
             <div key={m.id} className={`flex w-full mb-8 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`relative max-w-[85%] ${m.role === 'user' ? 'bg-[#ECECF1] px-4 py-3 rounded-2xl text-sm shadow-sm' : 'w-full'}`}>
+              <div className={`relative max-w-[95%] px-5 py-4 rounded-3xl transition-all duration-300 ${
+                m.role === 'user' 
+                  ? 'bg-[#ECECF1] text-sm shadow-sm' 
+                  : 'bg-white/60 backdrop-blur-xl border border-white/40 shadow-xl ring-1 ring-black/5 w-full'
+              }`}>
                 {m.role === 'user' ? (
-                  <p className="leading-relaxed">{m.content}</p>
+                  <p className="leading-relaxed font-medium text-gray-800">{m.content}</p>
                 ) : (
-                  <AlphaTypewriter text={m.content} speed={12} />
+                  <div className="text-gray-900">
+                    <AlphaTypewriter text={m.content} speed={12} />
+                  </div>
                 )}
               </div>
             </div>
           ))}
 
           {isThinking && (
-            <div className="flex justify-start items-center space-x-2 opacity-50">
+            <div className="flex justify-start items-center space-x-2 opacity-50 ml-4">
               <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.3s]" />
               <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce [animation-delay:-0.15s]" />
               <div className="w-1.5 h-1.5 bg-black rounded-full animate-bounce" />
