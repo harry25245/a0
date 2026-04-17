@@ -5,33 +5,52 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
-const AlphaTypewriter = ({ text, onComplete }: { text: string; onComplete?: () => void }) => {
+// --- THE ALPHA STREAMING COMPONENT ---
+const AlphaStreamer = ({ text, onSpeakToggle }: { text: string; onSpeakToggle: () => void }) => {
   const [displayedText, setDisplayedText] = useState("");
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
     let i = 0;
     const timer = setInterval(() => {
-      setDisplayedText((prev) => prev + text.charAt(i));
+      setDisplayedText(text.slice(0, i + 1));
       i++;
       if (i >= text.length) {
         clearInterval(timer);
         setIsDone(true);
-        if (onComplete) onComplete();
       }
-    }, 12);
+    }, 10); // Faster typing speed
     return () => clearInterval(timer);
-  }, [text, onComplete]);
+  }, [text]);
 
   return (
-    <div className="w-full">
-      {isDone ? (
-        <div className="prose prose-sm max-w-none text-gray-900">
-          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{text}</ReactMarkdown>
-        </div>
-      ) : (
-        <div className="font-mono text-sm text-gray-500 whitespace-pre-wrap">{displayedText}<span className="inline-block w-2 h-4 ml-1 bg-gray-400 animate-pulse" /></div>
-      )}
+    <div className="relative group">
+      {/* SPEAKER BUTTON - Top Right */}
+      <button 
+        onClick={onSpeakToggle}
+        className="absolute -top-2 -right-2 p-1.5 bg-white rounded-full shadow-md border border-gray-100 hover:bg-gray-50 transition-all z-10"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+        </svg>
+      </button>
+
+      <div className="prose prose-sm max-w-none text-gray-900 transition-all duration-300">
+        <ReactMarkdown 
+          remarkPlugins={[remarkMath]} 
+          rehypePlugins={[rehypeKatex]}
+          components={{
+            // Fade-in animation for LaTeX blocks
+            math: ({value}) => <div className="animate-in fade-in duration-700 my-2">{value}</div>,
+            inlineMath: ({value}) => <span className="animate-in fade-in duration-500 font-bold">{value}</span>
+          }}
+        >
+          {displayedText}
+        </ReactMarkdown>
+        {!isDone && <span className="inline-block w-1.5 h-4 ml-1 bg-cyan-400 animate-pulse" />}
+      </div>
     </div>
   );
 };
@@ -41,7 +60,7 @@ export default function AlphaAI() {
   const [messages, setMessages] = useState<{ role: string; content: string; id: number }[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [activeAudio, setActiveAudio] = useState<HTMLAudioElement | null>(null);
   const [weather, setWeather] = useState('Locating...');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -57,8 +76,14 @@ export default function AlphaAI() {
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, isThinking]);
 
-  const speak = async (text: string) => {
-    setIsSpeaking(true);
+  const handleVoiceToggle = async (text: string) => {
+    // If already playing, stop it
+    if (activeAudio) {
+      activeAudio.pause();
+      setActiveAudio(null);
+      return;
+    }
+
     const cleanText = text.replace(/[*#$]/g, '');
     try {
       const response = await fetch('/api/voice', {
@@ -68,9 +93,10 @@ export default function AlphaAI() {
       });
       const blob = await response.blob();
       const audio = new Audio(URL.createObjectURL(blob));
-      audio.onended = () => setIsSpeaking(false);
+      setActiveAudio(audio);
+      audio.onended = () => setActiveAudio(null);
       audio.play();
-    } catch { setIsSpeaking(false); }
+    } catch { setActiveAudio(null); }
   };
 
   const toggleListening = () => {
@@ -101,25 +127,35 @@ export default function AlphaAI() {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#F9F9F8] text-[#212121] overflow-hidden">
-      <nav className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-[#F9F9F8] z-20 font-bold">
-        <div><span className="text-xs tracking-widest">ALPHA AI</span><span className="block text-[8px] text-green-600 uppercase tracking-tighter">System Active</span></div>
-        <span className="text-[10px] text-gray-400">{weather}</span>
+    <div className="fixed inset-0 flex flex-col bg-[#F9F9F8] text-[#212121] overflow-hidden font-sans">
+      <nav className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-[#F9F9F8] z-20">
+        <div className="flex flex-col">
+          <span className="text-xs font-black tracking-widest">ALPHA AI</span>
+          <span className="text-[10px] text-green-600 font-medium uppercase tracking-tighter italic">Voice Enabled</span>
+        </div>
+        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{weather}</span>
       </nav>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-10">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-10 scroll-smooth">
         <div className="max-w-2xl mx-auto w-full">
           {messages.map((m) => (
             <div key={m.id} className={`flex w-full mb-8 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`relative max-w-[95%] px-5 py-4 rounded-3xl transition-all duration-700 ${
+              <div className={`relative max-w-[95%] px-5 py-4 rounded-3xl transition-all duration-500 ${
                 m.role === 'user' ? 'bg-[#ECECF1] text-sm shadow-sm' : 
-                `bg-white/60 backdrop-blur-xl border shadow-xl ring-1 ring-black/5 w-full ${isSpeaking ? 'border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)]' : 'border-white/40'}`
+                `bg-white/60 backdrop-blur-xl border shadow-xl ring-1 ring-black/5 w-full ${activeAudio ? 'border-cyan-400 ring-cyan-200/50 shadow-[0_0_20px_rgba(34,211,238,0.2)]' : 'border-white/40'}`
               }`}>
-                {m.role === 'user' ? <p className="font-medium text-gray-800">{m.content}</p> : 
-                <AlphaTypewriter text={m.content} onComplete={() => m.role === 'assistant' && speak(m.content)} />}
+                {m.role === 'user' ? <p className="font-medium text-gray-800 leading-relaxed">{m.content}</p> : 
+                <AlphaStreamer text={m.content} onSpeakToggle={() => handleVoiceToggle(m.content)} />}
               </div>
             </div>
           ))}
+          {isThinking && (
+            <div className="flex justify-start items-center space-x-2 opacity-50 ml-4 animate-pulse">
+              <div className="w-1.5 h-1.5 bg-black rounded-full" />
+              <div className="w-1.5 h-1.5 bg-black rounded-full" />
+              <div className="w-1.5 h-1.5 bg-black rounded-full" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -130,10 +166,11 @@ export default function AlphaAI() {
           </button>
           <div className="relative flex-1 flex items-center bg-white border border-gray-300 rounded-2xl shadow-sm focus-within:ring-1 focus-within:ring-gray-400">
             <textarea rows={1} className="w-full py-4 pl-4 pr-12 bg-transparent resize-none focus:outline-none text-sm" placeholder={isListening ? "Listening..." : "Speak or type..."} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}/>
-            <button onClick={handleSend} disabled={isThinking || !input.trim()} className="absolute right-2 p-2 text-black disabled:text-gray-200"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+            <button onClick={handleSend} disabled={isThinking || !input.trim()} className="absolute right-2 p-2 text-black disabled:text-gray-200">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
           </div>
         </div>
-        <p className="text-[9px] text-center mt-3 text-gray-400 font-medium uppercase tracking-widest italic">Personal Assistant v1.2 • Voice Enabled</p>
       </div>
     </div>
   );
