@@ -19,13 +19,13 @@ const AlphaStreamer = ({ text, onSpeakToggle }: { text: string; onSpeakToggle: (
         clearInterval(timer);
         setIsDone(true);
       }
-    }, 10); // Faster typing speed
+    }, 10);
     return () => clearInterval(timer);
   }, [text]);
 
   return (
     <div className="relative group">
-      {/* SPEAKER BUTTON - Top Right */}
+      {/* SPEAKER BUTTON */}
       <button 
         onClick={onSpeakToggle}
         className="absolute -top-2 -right-2 p-1.5 bg-white rounded-full shadow-md border border-gray-100 hover:bg-gray-50 transition-all z-10"
@@ -37,15 +37,11 @@ const AlphaStreamer = ({ text, onSpeakToggle }: { text: string; onSpeakToggle: (
         </svg>
       </button>
 
+      {/* RENDERER */}
       <div className="prose prose-sm max-w-none text-gray-900 transition-all duration-300">
         <ReactMarkdown 
           remarkPlugins={[remarkMath]} 
           rehypePlugins={[rehypeKatex]}
-          components={{
-            // Fade-in animation for LaTeX blocks
-            math: ({value}) => <div className="animate-in fade-in duration-700 my-2">{value}</div>,
-            inlineMath: ({value}) => <span className="animate-in fade-in duration-500 font-bold">{value}</span>
-          }}
         >
           {displayedText}
         </ReactMarkdown>
@@ -64,6 +60,7 @@ export default function AlphaAI() {
   const [weather, setWeather] = useState('Locating...');
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Weather Logic
   useEffect(() => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition((pos) => {
@@ -74,16 +71,16 @@ export default function AlphaAI() {
     }
   }, []);
 
+  // Scroll Logic
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, isThinking]);
 
+  // Voice Toggle
   const handleVoiceToggle = async (text: string) => {
-    // If already playing, stop it
     if (activeAudio) {
       activeAudio.pause();
       setActiveAudio(null);
       return;
     }
-
     const cleanText = text.replace(/[*#$]/g, '');
     try {
       const response = await fetch('/api/voice', {
@@ -99,6 +96,7 @@ export default function AlphaAI() {
     } catch { setActiveAudio(null); }
   };
 
+  // Mic Logic
   const toggleListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -109,6 +107,7 @@ export default function AlphaAI() {
     isListening ? recognition.stop() : recognition.start();
   };
 
+  // Chat Logic
   const handleSend = async () => {
     if (!input.trim() || isThinking) return;
     const userMsg = { role: 'user', content: input, id: Date.now() };
@@ -130,8 +129,8 @@ export default function AlphaAI() {
     <div className="fixed inset-0 flex flex-col bg-[#F9F9F8] text-[#212121] overflow-hidden font-sans">
       <nav className="shrink-0 flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-[#F9F9F8] z-20">
         <div className="flex flex-col">
-          <span className="text-xs font-black tracking-widest">ALPHA AI</span>
-          <span className="text-[10px] text-green-600 font-medium uppercase tracking-tighter italic">Voice Enabled</span>
+          <span className="text-xs font-black tracking-widest text-gray-800">ALPHA AI</span>
+          <span className="text-[10px] text-green-600 font-medium uppercase tracking-tighter italic">Voice Active</span>
         </div>
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{weather}</span>
       </nav>
